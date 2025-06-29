@@ -6,7 +6,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filte
 # === ENV CONFIG ===
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-MODEL_NAME = "gemini-2.5-pro"
+MODEL_NAME = "gemini-1.5-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/{MODEL_NAME}:generateContent?key={GEMINI_API_KEY}"
 
 # === Chat memory: (chat_id, user_id) → (last_user_msg, last_bot_reply)
