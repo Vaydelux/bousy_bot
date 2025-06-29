@@ -9,8 +9,11 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MODEL_NAME = "gemini-1.5-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/{MODEL_NAME}:generateContent?key={GEMINI_API_KEY}"
 
-# === Gemini Function ===
-async def ask_gemini(prompt: str) -> str:
+# === Chat memory: (chat_id, user_id) → (last_user_msg, last_bot_reply)
+chat_memory = {}
+
+# === Gemini Query Function ===
+async def ask_gemini(chat_id: int, user_id: int, prompt: str) -> str:
     headers = {"Content-Type": "application/json"}
 
     system_instruction = (
@@ -21,42 +24,53 @@ async def ask_gemini(prompt: str) -> str:
         "Be concise, friendly, and easy to understand."
     )
 
-    payload = {
-        "contents": [
-            {"role": "user", "parts": [{"text": system_instruction}]},
-            {"role": "user", "parts": [{"text": prompt}]}
-        ]
-    }
+    # Build conversation context
+    context = [{"role": "user", "parts": [{"text": system_instruction}]}]
+
+    key = (chat_id, user_id)
+    if key in chat_memory:
+        last_user, last_bot = chat_memory[key]
+        context.append({"role": "user", "parts": [{"text": last_user}]})
+        context.append({"role": "model", "parts": [{"text": last_bot}]})
+
+    context.append({"role": "user", "parts": [{"text": prompt}]})
+    payload = {"contents": context}
 
     try:
         res = requests.post(GEMINI_URL, headers=headers, json=payload)
         res.raise_for_status()
-        return res.json()["candidates"][0]["content"]["parts"][0]["text"]
+        reply = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+        # Update chat memory
+        chat_memory[key] = (prompt, reply)
+        return reply
     except Exception as e:
-        print("Gemini Error:", e)
+        print("Gemini API error:", e)
         return f"⚠️ Gemini Error: {e}"
 
-# === Telegram Bot Handler ===
+# === Telegram Message Handler ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
+    if not message or not message.text:
+        return
 
-    # In group, only respond if bot is mentioned
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_input = message.text
+
+    # In group: only respond if bot is mentioned
     if message.chat.type in ["group", "supergroup"]:
         bot_username = context.bot.username.lower()
-        if f"@{bot_username}" not in message.text.lower():
+        if f"@{bot_username}" not in user_input.lower():
             return
 
-    user_input = message.text
-    print("User:", user_input)
-
-    response = await ask_gemini(user_input)
-    print("Bot:", response)
-
+    print(f"[{chat_id}] User {user_id} asked: {user_input}")
+    response = await ask_gemini(chat_id, user_id, user_input)
     await message.reply_text(response)
 
-# === Main App ===
+# === Start Bot ===
 if __name__ == "__main__":
-    print("🚀 Bot started on Railway")
+    print("🚀 Gemini Telegram Bot with Memory is running...")
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.run_polling()
