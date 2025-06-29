@@ -1,5 +1,4 @@
 import os
-import html
 import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
@@ -13,11 +12,6 @@ GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/{MODEL_NAME}:
 # === Chat memory: (chat_id, user_id) → (last_user_msg, last_bot_reply)
 chat_memory = {}
 
-# === HTML Escaper for Telegram ===
-def sanitize_for_html(text: str) -> str:
-    # Escape &, <, >
-    return html.escape(text)
-
 # === Gemini Query Function ===
 async def ask_gemini(chat_id: int, user_id: int, prompt: str) -> str:
     headers = {"Content-Type": "application/json"}
@@ -28,6 +22,7 @@ async def ask_gemini(chat_id: int, user_id: int, prompt: str) -> str:
         "Translate the answer to the same language. "
         "Start your reply with 1 appropriate emoji. "
         "Be concise, friendly, and easy to understand."
+        "You don't use bold italic or anything just plain text"
     )
 
     # Build conversation context
@@ -72,10 +67,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     print(f"[{chat_id}] User {user_id} asked: {user_input}")
     response = await ask_gemini(chat_id, user_id, user_input)
-
-    # Clean output for Telegram HTML mode
-    cleaned = sanitize_for_html(response)
-    await message.reply_text(cleaned, parse_mode="HTML")
+    await message.reply_text(response)
 
 # === Start Bot ===
 if __name__ == "__main__":
